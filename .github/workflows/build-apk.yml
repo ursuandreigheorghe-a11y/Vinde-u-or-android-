@@ -4,27 +4,23 @@ name: Build Vinde Usor APK
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Get project
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Check ZIP
-        run: |
-          ls -la
-          test -f vinde_usor_android_cloud_build.zip
+      - name: Install unzip
+        run: sudo apt-get update && sudo apt-get install -y unzip
 
       - name: Unpack project
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-          mkdir project
           unzip -o vinde_usor_android_cloud_build.zip -d project
-          find project -maxdepth 3 -name gradlew
+          find project -name gradlew -type f
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -32,21 +28,17 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-          - name: Set up Android
+      - name: Set up Android
         uses: android-actions/setup-android@v3
 
       - name: Accept Android licenses
-        run: yes | sdkmanager --licenses
-    
+        run: yes | sdkmanager --licenses || true
 
       - name: Build APK
         run: |
-          cd project
-          if [ ! -f gradlew ]; then
-            DIR=$(find . -name gradlew -type f | head -n 1)
-            test -n "$DIR"
-            cd "$(dirname "$DIR")"
-          fi
+          GRADLEW=$(find project -name gradlew -type f | head -n 1)
+          test -n "$GRADLEW"
+          cd "$(dirname "$GRADLEW")"
           chmod +x gradlew
           ./gradlew assembleDebug
 
