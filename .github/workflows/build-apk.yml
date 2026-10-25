@@ -32,8 +32,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Set up Android
+          - name: Set up Android
         uses: android-actions/setup-android@v3
+
+      - name: Accept Android licenses
+        run: yes | sdkmanager --licenses
+    
 
       - name: Build APK
         run: |
