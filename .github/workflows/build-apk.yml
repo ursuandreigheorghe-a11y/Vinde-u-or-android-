@@ -1,36 +1,54 @@
-# This is a basic workflow to help you get started with Actions
 
 name: Build Vinde Usor APK
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
+  workflow_dispatch:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
 
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  # This workflow contains a single job called "build"
   build:
-    # The type of runner that the job will run on
     runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
+      - name: Get project
+        uses: actions/checkout@v4
 
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
+      - name: Check ZIP
         run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
+          ls -la
+          test -f vinde_usor_android_cloud_build.zip
+
+      - name: Unpack project
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip
+          mkdir project
+          unzip -o vinde_usor_android_cloud_build.zip -d project
+          find project -maxdepth 3 -name gradlew
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        run: |
+          cd project
+          if [ ! -f gradlew ]; then
+            DIR=$(find . -name gradlew -type f | head -n 1)
+            test -n "$DIR"
+            cd "$(dirname "$DIR")"
+          fi
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vinde-Usor-APK
+          path: project/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
