@@ -10,18 +10,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install unzip
-        run: sudo apt-get update && sudo apt-get install -y unzip
+      - name: Install tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unzip wget
 
       - name: Unpack project
         run: |
           mkdir -p project
           unzip -o vinde_usor_android_cloud_build.zip -d project
-          find project -name gradlew -type f
+          find project -name build.gradle -type f
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -29,22 +32,24 @@ jobs:
           distribution: temurin
           java-version: '17'
 
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.9-bin.zip -O /tmp/gradle.zip
+          unzip -q /tmp/gradle.zip -d /tmp
+          echo "/tmp/gradle-8.9/bin" >> "$GITHUB_PATH"
+
       - name: Set up Android SDK
         run: |
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
-      - name: Accept Android licenses
-        run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-
       - name: Build APK
         run: |
-          GRADLEW=$(find project -name gradlew -type f | head -n 1)
-          test -n "$GRADLEW"
-          cd "$(dirname "$GRADLEW")"
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
+          test -n "$BUILD_FILE"
+          cd "$(dirname "$BUILD_FILE")"
+          gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
