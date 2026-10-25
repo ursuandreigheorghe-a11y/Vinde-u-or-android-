@@ -1,0 +1,43 @@
+name: Build Vinde Usor APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'vinde_usor_android_cloud_build.zip'
+      - '.github/workflows/build-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download repository
+        uses: actions/checkout@v4
+
+      - name: Extract project ZIP
+        run: |
+          unzip -o vinde_usor_android_cloud_build.zip -d project
+          ls -la project
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build APK
+        working-directory: project
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Vinde-Usor-APK
+          path: project/app/build/outputs/apk/debug/*.apk
+
