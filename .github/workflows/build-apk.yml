@@ -19,6 +19,7 @@ jobs:
 
       - name: Unpack project
         run: |
+          mkdir -p project
           unzip -o vinde_usor_android_cloud_build.zip -d project
           find project -name gradlew -type f
 
@@ -28,15 +29,14 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-        - name: Set up Android SDK
+      - name: Set up Android SDK
         run: |
-          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> $GITHUB_ENV
+          echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "platforms;android-35" "build-tools;35.0.0"
-    
 
       - name: Accept Android licenses
-        run: yes | sdkmanager --licenses || true
+        run: yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
 
       - name: Build APK
         run: |
