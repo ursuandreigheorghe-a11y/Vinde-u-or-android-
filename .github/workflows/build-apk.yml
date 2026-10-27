@@ -23,7 +23,7 @@ jobs:
       - name: Unpack project
         run: |
           mkdir -p project
-          unzip -o vinde_usor_android_cloud_build.zip -d project
+          unzip -o Vinde_Usor_AI_conectat.zip -d project
           find project -name build.gradle -type f
 
       - name: Set up Java
