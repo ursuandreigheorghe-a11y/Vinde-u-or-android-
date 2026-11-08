@@ -53,6 +53,7 @@ jobs:
       - name: Configure AndroidX
         run: |
           BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
+
           if [ -z "$BUILD_FILE" ]; then
             echo "EROARE: Nu gasesc build.gradle principal."
             exit 1
@@ -66,8 +67,13 @@ jobs:
       - name: Build APK
         run: |
           BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
-          PROJECT_DIR="$(dirname "$BUILD_FILE")"
 
+          if [ -z "$BUILD_FILE" ]; then
+            echo "EROARE: Nu gasesc build.gradle principal."
+            exit 1
+          fi
+
+          PROJECT_DIR="$(dirname "$BUILD_FILE")"
           cd "$PROJECT_DIR"
 
           echo "Construiesc APK..."
@@ -113,51 +119,40 @@ jobs:
 
           if not config:
               raise SystemExit(
-                  "EROARE: Nu exista aplicatia com.vindeusor.app in JSON."
+                  "EROARE: Aplicatia com.vindeusor.app nu exista in JSON."
               )
 
           print("2. Aplicatia Android a fost gasita.")
 
-          web_ids = set()
-
-          for oauth in config.get("oauth_client", []):
-              if str(oauth.get("client_type")) == "3":
-                  client_id = oauth.get("client_id")
-                  if client_id:
-                      web_ids.add(client_id)
+          web_ids = {
+              item.get("client_id")
+              for item in config.get("oauth_client", [])
+              if str(item.get("client_type")) == "3"
+              and item.get("client_id")
+          }
 
           if not web_ids:
               raise SystemExit(
-                  "EROARE: Clientul OAuth de tip Web lipseste din JSON."
+                  "EROARE: Clientul OAuth Web lipseste din JSON."
               )
 
           print("3. Client OAuth Web gasit.")
 
-          print("4. Caut automat fisierul values.xml...")
+          print("4. Caut values.xml generat de Google Services...")
 
-          xml_files = []
-
-          for file in root.rglob("values.xml"):
-              if "build" in file.parts and "generated" in file.parts:
-                  if "google-services" in file.parts:
-                      xml_files.append(file)
+          xml_files = list(root.rglob(
+              "build/generated/res/processDebugGoogleServices/values/values.xml"
+          ))
 
           if not xml_files:
-              print("Nu am gasit values.xml in locatia asteptata.")
-              print("Verific fisierele generate de Gradle:")
-
-              for file in root.rglob("*.xml"):
-                  if "build" in file.parts and "generated" in file.parts:
-                      print(file)
-
               raise SystemExit(
-                  "EROARE: Pluginul Google Services nu a generat values.xml."
+                  "EROARE: Nu gasesc values.xml generat de Google Services."
               )
 
           found = False
 
           for file in xml_files:
-              print("Verific:", file)
+              print("Verific fisierul:", file)
 
               tree = ET.parse(file)
 
@@ -165,21 +160,20 @@ jobs:
                   if item.attrib.get("name") == "default_web_client_id":
                       generated_id = (item.text or "").strip()
 
-                      if generated_id in web_ids:
-                          found = True
-                          print("SUCCES: default_web_client_id este corect.")
-                          break
+                      if generated_id not in web_ids:
+                          raise SystemExit(
+                              "EROARE: ID-ul generat nu corespunde clientului OAuth Web."
+                          )
 
-                      raise SystemExit(
-                          "EROARE: ID-ul generat nu corespunde clientului OAuth Web."
-                      )
+                      found = True
+                      break
 
               if found:
                   break
 
           if not found:
               raise SystemExit(
-                  "EROARE: default_web_client_id nu exista in values.xml."
+                  "EROARE: default_web_client_id lipseste din values.xml."
               )
 
           print("SUCCES: Configuratia Firebase Google este verificata.")
