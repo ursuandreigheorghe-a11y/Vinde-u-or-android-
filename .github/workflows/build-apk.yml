@@ -47,6 +47,15 @@ jobs:
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
             "platform-tools" "platforms;android-35" "build-tools;35.0.0"
 
+      - name: Enable AndroidX
+        run: |
+          BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
+          test -n "$BUILD_FILE"
+          PROJECT_DIR="$(dirname "$BUILD_FILE")"
+          echo "android.useAndroidX=true" > "$PROJECT_DIR/gradle.properties"
+          echo "android.enableJetifier=true" >> "$PROJECT_DIR/gradle.properties"
+          cat "$PROJECT_DIR/gradle.properties"
+
       - name: Build APK and show SHA-1
         run: |
           BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
