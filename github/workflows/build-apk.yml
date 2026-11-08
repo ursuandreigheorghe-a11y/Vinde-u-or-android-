@@ -1,3 +1,4 @@
+
 name: Build Vinde Usor APK
 
 on:
@@ -35,9 +36,13 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
+      - name: Show SHA-1 fingerprint
+        working-directory: project
+        run: |
+          ./gradlew signingReport
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Vinde-Usor-APK
           path: project/app/build/outputs/apk/debug/*.apk
-
