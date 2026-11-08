@@ -24,7 +24,8 @@ jobs:
         run: |
           mkdir -p project
           unzip -o Vinde_Usor_AI_actualizat.zip -d project
-          find project -name build.gradle -type f
+          echo "CONTINUT PROIECT:"
+          find project -maxdepth 3 -type f | head -100
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -45,22 +46,34 @@ jobs:
           echo "ANDROID_HOME=$ANDROID_SDK_ROOT" >> "$GITHUB_ENV"
           yes | "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" --licenses || true
           "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager" \
-            "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+            "platform-tools" \
+            "platforms;android-35" \
+            "build-tools;35.0.0"
 
-      - name: Enable AndroidX
+      - name: Configure AndroidX
         run: |
           BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
-          test -n "$BUILD_FILE"
+          if [ -z "$BUILD_FILE" ]; then
+            echo "EROARE: Nu gasesc build.gradle principal."
+            exit 1
+          fi
+
           PROJECT_DIR="$(dirname "$BUILD_FILE")"
+
           echo "android.useAndroidX=true" > "$PROJECT_DIR/gradle.properties"
           echo "android.enableJetifier=true" >> "$PROJECT_DIR/gradle.properties"
 
       - name: Build APK
         run: |
           BUILD_FILE=$(find project -name build.gradle -type f | grep -v '/app/' | head -n 1)
-          test -n "$BUILD_FILE"
-          cd "$(dirname "$BUILD_FILE")"
+          PROJECT_DIR="$(dirname "$BUILD_FILE")"
+
+          cd "$PROJECT_DIR"
+
+          echo "Construiesc APK..."
           gradle assembleDebug
+
+          echo "Verific semnatura..."
           gradle signingReport
 
       - name: Verify Firebase Google Client ID
@@ -72,21 +85,20 @@ jobs:
 
           root = Path("project")
 
+          print("1. Caut google-services.json...")
+
           json_files = list(root.rglob("google-services.json"))
-          xml_files = list(root.rglob(
-              "build/generated/res/google-services/debug/values/values.xml"
-          ))
 
           if not json_files:
               raise SystemExit("EROARE: google-services.json lipseste.")
 
-          if not xml_files:
-              raise SystemExit("EROARE: values.xml nu a fost generat.")
-
           config = None
 
           for file in json_files:
+              print("Fisier gasit:", file)
+
               data = json.loads(file.read_text(encoding="utf-8"))
+
               for client in data.get("client", []):
                   package = client.get("client_info", {}).get(
                       "android_client_info", {}
@@ -95,44 +107,82 @@ jobs:
                   if package == "com.vindeusor.app":
                       config = client
                       break
+
               if config:
                   break
 
           if not config:
-              raise SystemExit("EROARE: aplicatia Android nu exista in JSON.")
+              raise SystemExit(
+                  "EROARE: Nu exista aplicatia com.vindeusor.app in JSON."
+              )
+
+          print("2. Aplicatia Android a fost gasita.")
 
           web_ids = set()
 
           for oauth in config.get("oauth_client", []):
               if str(oauth.get("client_type")) == "3":
-                  web_ids.add(oauth.get("client_id"))
-
-          web_ids.discard(None)
+                  client_id = oauth.get("client_id")
+                  if client_id:
+                      web_ids.add(client_id)
 
           if not web_ids:
-              raise SystemExit("EROARE: client OAuth Web lipseste.")
+              raise SystemExit(
+                  "EROARE: Clientul OAuth de tip Web lipseste din JSON."
+              )
+
+          print("3. Client OAuth Web gasit.")
+
+          print("4. Caut automat fisierul values.xml...")
+
+          xml_files = []
+
+          for file in root.rglob("values.xml"):
+              if "build" in file.parts and "generated" in file.parts:
+                  if "google-services" in file.parts:
+                      xml_files.append(file)
+
+          if not xml_files:
+              print("Nu am gasit values.xml in locatia asteptata.")
+              print("Verific fisierele generate de Gradle:")
+
+              for file in root.rglob("*.xml"):
+                  if "build" in file.parts and "generated" in file.parts:
+                      print(file)
+
+              raise SystemExit(
+                  "EROARE: Pluginul Google Services nu a generat values.xml."
+              )
 
           found = False
 
           for file in xml_files:
+              print("Verific:", file)
+
               tree = ET.parse(file)
+
               for item in tree.getroot().findall("string"):
                   if item.attrib.get("name") == "default_web_client_id":
-                      found = True
-                      generated_id = item.text
+                      generated_id = (item.text or "").strip()
 
                       if generated_id in web_ids:
+                          found = True
                           print("SUCCES: default_web_client_id este corect.")
                           break
-                      else:
-                          raise SystemExit(
-                              "EROARE: ID-ul generat nu corespunde clientului Web."
-                          )
+
+                      raise SystemExit(
+                          "EROARE: ID-ul generat nu corespunde clientului OAuth Web."
+                      )
+
+              if found:
+                  break
 
           if not found:
-              raise SystemExit("EROARE: default_web_client_id nu a fost generat.")
+              raise SystemExit(
+                  "EROARE: default_web_client_id nu exista in values.xml."
+              )
 
-          print("SUCCES: configuratia Firebase Google este verificata.")
+          print("SUCCES: Configuratia Firebase Google este verificata.")
           PY
 
       - name: Upload APK
