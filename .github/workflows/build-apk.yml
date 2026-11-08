@@ -18,7 +18,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y unzip curl
+          sudo apt-get install -y unzip curl python3
 
       - name: Unpack project
         run: |
@@ -62,6 +62,78 @@ jobs:
           cd "$(dirname "$BUILD_FILE")"
           gradle assembleDebug
           gradle signingReport
+
+      - name: Verify Firebase Google Client ID
+        run: |
+          python3 - <<'PY'
+          import json
+          import xml.etree.ElementTree as ET
+          from pathlib import Path
+
+          root = Path("project")
+
+          json_files = list(root.rglob("google-services.json"))
+          xml_files = list(root.rglob(
+              "build/generated/res/google-services/debug/values/values.xml"
+          ))
+
+          if not json_files:
+              raise SystemExit("EROARE: google-services.json lipseste.")
+
+          if not xml_files:
+              raise SystemExit("EROARE: values.xml nu a fost generat.")
+
+          config = None
+
+          for file in json_files:
+              data = json.loads(file.read_text(encoding="utf-8"))
+              for client in data.get("client", []):
+                  package = client.get("client_info", {}).get(
+                      "android_client_info", {}
+                  ).get("package_name")
+
+                  if package == "com.vindeusor.app":
+                      config = client
+                      break
+              if config:
+                  break
+
+          if not config:
+              raise SystemExit("EROARE: aplicatia Android nu exista in JSON.")
+
+          web_ids = set()
+
+          for oauth in config.get("oauth_client", []):
+              if str(oauth.get("client_type")) == "3":
+                  web_ids.add(oauth.get("client_id"))
+
+          web_ids.discard(None)
+
+          if not web_ids:
+              raise SystemExit("EROARE: client OAuth Web lipseste.")
+
+          found = False
+
+          for file in xml_files:
+              tree = ET.parse(file)
+              for item in tree.getroot().findall("string"):
+                  if item.attrib.get("name") == "default_web_client_id":
+                      found = True
+                      generated_id = item.text
+
+                      if generated_id in web_ids:
+                          print("SUCCES: default_web_client_id este corect.")
+                          break
+                      else:
+                          raise SystemExit(
+                              "EROARE: ID-ul generat nu corespunde clientului Web."
+                          )
+
+          if not found:
+              raise SystemExit("EROARE: default_web_client_id nu a fost generat.")
+
+          print("SUCCES: configuratia Firebase Google este verificata.")
+          PY
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
